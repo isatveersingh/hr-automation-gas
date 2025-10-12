@@ -1,0 +1,61 @@
+<!-- 
+*** How to deploy the script ***
+Note: Follow these steps if you have already made atleast one deployment previously
+
+Step 1.
+-- Click on 'Deploy' >> 'Manage Deployments'
+
+Step 2. 
+-- Make sure you select the latest deployment under "Active" section 
+
+Step 3.
+-- Click on pencil icon to edit the deployment
+-- Select version and create "New Version"
+-- Add relavant description
+-- Select "Excute As" and "Who has access" scope according to your preference
+-- Click on "Deploy" to make deployment
+
+Step 4.
+-- Copy the Web App URL and close the popup modal
+-- Go to 'Project Setting' in left sidebar
+-- In script properties, set 'Property' input to "AL_REQUEST_FORM" and 'Value' input to the Web App link you copied in above.
+-- Save the properties.
+
+*** How to setup automatic trigger to run functions on daily basis ***
+
+Step 1.
+-- Go to 'Triggers' in left sidebar
+
+Step 2. 
+-- Click on 'Add Trigger'
+
+Step 3.
+-- Choose which function to run = "autoTriggerMainFunction"
+-- Choose which deployment should run = "Head"
+-- Select event source = "Time-Driven"
+-- Select type of time-based trigger = "Day Timer"
+-- Select time of day = <select time according to your preference>
+-- Click on 'Save'
+
+You should see a time driven trigger has created with function "autoTriggerMainFunction".
+
+
+*** Placeholders used for email templates *** 
+[EMP_NAME] = Employee's name
+[BIRTHDAY] = Employee's birthday
+[AL_REQUEST_FORM] = Link for Annual Leave Request Form
+[TOTAL_AL] = Total available leaves
+[AL_USED] = Annual leaves used by employee
+[AL_REMAINING] = Remaining annual leaves
+[START_DATE] = Start date of annual leave
+[END_DATE] = End date of annual leave
+[DAYS_COUNT] = Total days count of annual leave request
+[LEAVE_TYPE] = Type of leave request "Annual Leave" or "Compensatory Days Off"
+[RES_COLL] = Responsible colleague during leave
+[TEAMLEAD_NAME] = Team lead name
+[VACATION_TYPE] = Type of vacation "Paid" or "Unpaid"
+
+ -->
+
+
+
