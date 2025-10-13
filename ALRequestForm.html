@@ -76,6 +76,10 @@
         transform: rotate(360deg);
       }
     }
+
+    option {
+      margin-bottom: 5px;
+    }
   </style>
 </head>
 
@@ -107,13 +111,15 @@
     <select id="leaveType" required>
         <option value="">Select Leave Type</option>
         <option value="Annual Leave">Annual Leave</option>
+        <option value="Sick Leave">Sick Leave</option>
         <option value="Compensatory Days Off">Compensatory Days Off</option>
       </select>
 
     <label for="responsibleColleague">Responsible Colleague</label>
-    <select id="responsibleColleague">
-        <option value="">Select a Colleague</option>
-      </select>
+    <small style="color:gray; font-style:italic;">
+      Hold <b>Ctrl</b> (Windows) or <b>Command</b> (Mac) to select multiple colleagues.
+    </small>
+    <select id="responsibleColleague" multiple></select>
 
     <label for="teamLead">Approving Team Lead</label>
     <select id="teamLead" required>
@@ -153,7 +159,7 @@
             document.getElementById("empEmail").value = data.empEmail;
 
             const colleagueSelect = document.getElementById("responsibleColleague");
-            colleagueSelect.innerHTML = `<option value="">Select a Colleague</option>`;
+            colleagueSelect.innerHTML = "";
             data.colleagues.forEach((col) => {
               const opt = document.createElement("option");
               opt.value = col;
@@ -195,7 +201,7 @@
           startDate: document.getElementById("startDate").value,
           daysCount: document.getElementById("daysCount").value,
           leaveType: document.getElementById("leaveType").value,
-          responsibleColleague: document.getElementById("responsibleColleague").value,
+          responsibleColleague: Array.from(document.getElementById("responsibleColleague").selectedOptions).map(o => o.value).join(","),
           teamLead: document.getElementById("teamLead").value,
           vacationType: document.getElementById("vacationType").value,
         };

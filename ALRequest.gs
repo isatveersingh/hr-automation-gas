@@ -88,6 +88,13 @@ const sendAndUpdateALRequest = ({
       (row) => row[0].toString().trim() === "COMP_OFF_TEAMLEAD_NOTIFY"
     );
 
+    const sickLeaveHRnotify = emailTemplates.find(
+      (row) => row[0].toString().trim() === "SICK_LEAVE_HR_NOTIFY"
+    );
+    const sickLeaveTeamleadNotify = emailTemplates.find(
+      (row) => row[0].toString().trim() === "SICK_LEAVE_TEAMLEAD_NOTIFY"
+    );
+
     const date = new Date(startDate);
     let endDate = new Date(date);
     endDate.setDate(endDate.getDate() + parseInt(daysCount) - 1);
@@ -111,8 +118,8 @@ const sendAndUpdateALRequest = ({
           emp[6].toString().trim() !== ""
             ? parseInt(emp[6])
             : emp[4].toString().trim() !== ""
-            ? parseInt(emp[4])
-            : 0;
+              ? parseInt(emp[4])
+              : 0;
         if (leaveType === "Annual Leave") {
           empsheet
             .getRange(`E${i + 2}:H${i + 2}`)
@@ -170,6 +177,48 @@ const sendAndUpdateALRequest = ({
               vacationType,
               daysCount,
             ]);
+        } else if (leaveType === "Sick Leave") {
+          const sickLeaveSheet = spreadsheet.getSheetByName(SICK_LEAVE_SHEET);
+          sickLeaveSheet.appendRow([
+            empName,
+            empEmail,
+            dateStr,
+            endDateStr
+          ])
+
+          const hrSubject = sickLeaveHRnotify[1]
+            .toString()
+            .replace(/\[EMP_NAME\]/gi, empName);
+
+          const hrBody = sickLeaveHRnotify[2]
+            .toString()
+            .replace(/\[EMP_NAME\]/gi, empName)
+            .replace(/\[START_DATE\]/gi, dateStr)
+            .replace(/\[END_DATE\]/gi, endDateStr)
+            .replace(/\[DAYS_COUNT\]/gi, daysCount)
+            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
+            .replace(/\[RES_COLL\]/gi, resColl)
+            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
+            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+
+          for (let hr of hrEmails) {
+            sendEmail(hr, hrSubject, hrBody);
+          }
+          const tlSubject = sickLeaveTeamleadNotify[1]
+            .toString()
+            .replace(/\[EMP_NAME\]/gi, empName);
+          const tlBody = sickLeaveTeamleadNotify[2]
+            .toString()
+            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
+            .replace(/\[EMP_NAME\]/gi, empName)
+            .replace(/\[START_DATE\]/gi, dateStr)
+            .replace(/\[END_DATE\]/gi, endDateStr)
+            .replace(/\[DAYS_COUNT\]/gi, daysCount)
+            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
+            .replace(/\[RES_COLL\]/gi, resColl)
+            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+
+          sendEmail(teamLeadMng[1], tlSubject, tlBody);
         } else {
           empsheet
             .getRange(`E${i + 2}:G${i + 2}`)
