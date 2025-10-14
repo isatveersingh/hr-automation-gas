@@ -223,6 +223,79 @@ const manageAnnualLeaves = () => {
   }
 };
 
+const manageProbationPeriod = () => {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
+  const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  const probationsheet = spreadsheet.getSheetByName(PROBATION_SHEET)
+
+  const emplastrow = empsheet.getLastRow();
+  const employees = empsheet.getRange(`A2:H${emplastrow}`).getValues();
+
+  const hrEmails = settingsheet
+    .getRange("A2:B")
+    .getValues()
+    .filter((row) => row[0].toString().trim() !== "")
+    .map((row) => row[1]);
+  const emailTemplates = settingsheet.getRange("E2:G").getValues();
+
+  const probationHRnotify = emailTemplates.find(
+    (row) => row[0].toString().trim() === "PROBATION_HR_NOTIFY"
+  );
+
+  const probationData = probationsheet.getRange("A2:J").getValues()
+  const today = new Date();
+
+  for (let i = 0; i < employees.length; i++) {
+    const [name, email, _birthdayStr, joinDateStr] = employees[i];
+
+    if (name.toString().trim() === "") {
+      continue;
+    }
+
+    const joinDate = parseDate(joinDateStr);
+
+    const probationEndDate = new Date(joinDate)
+    probationEndDate.setMonth(probationEndDate.getMonth() + 3)
+
+    const probationNotifyDate = new Date(probationEndDate);
+    probationNotifyDate.setDate(probationNotifyDate.getDate() - 7)
+
+    if (isSameDayMonthYear(today, probationNotifyDate)) {
+      const subject = probationHRnotify[1]
+        .toString()
+        .replace(/\[EMP_NAME\]/gi, name);
+
+      const body = probationHRnotify[2]
+        .toString()
+        .replace(/\[EMP_NAME\]/gi, name)
+        .replace(/\[JOIN_DATE\]/gi, getFormattedDate(joinDate))
+        .replace(/\[PROBATION_END_DATE\]/gi, getFormattedDate(probationEndDate))
+
+      for (let hr of hrEmails) {
+        sendEmail(hr, subject, body)
+      }
+
+      probationsheet.appendRow([
+        name,
+        getFormattedDate(joinDate),
+        getFormattedDate(probationEndDate),
+        getFormattedDate(probationNotifyDate)
+      ])
+    }
+
+    if (isSameDayMonthYear(today, probationEndDate)) {
+      const probationStatus = probationData.find((row) => row[0] === name)[9];
+      if(probationStatus === "Probation Passed") {
+        // TO-DO: send email 
+      } 
+
+    }
+
+  }
+}
+
+
 /**
  * Main wrapper function for automatic trigger
  */
@@ -231,4 +304,5 @@ const autoTriggerMainFunction = () => {
   sendBirthdayNotifications();
   sendQuarterlyLeaveReminders();
   manageAnnualLeaves();
+  manageProbationPeriod();
 };
