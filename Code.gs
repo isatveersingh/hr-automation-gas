@@ -330,16 +330,9 @@ const manageProbationPeriod = () => {
       throw new Error(`Missing '${c}' column in Probation sheet.`);
   });
 
-  // === 🔹 Helpers (now imported from utils) ===
-  // fillTemplate(templateString, replacements)
-  // isSameDayMonthYear(date1, date2)
-  // getFormattedDate(date)
-  // parseDate(dateString)
-
   const today = new Date();
   const newProbationRows = [];
 
-  // === 🔹 Iterate employees ===
   employees.forEach((row) => {
     const name = (row[empIndex["name"]] || "").toString().trim();
     const email = (row[empIndex["email"]] || "").toString().trim();
@@ -386,12 +379,32 @@ const manageProbationPeriod = () => {
         sendEmail(depLead.email, tlSubject, tlBody);
       }
 
-      newProbationRows.push([
+      // === 🔹 Append row with dropdown in "Result" column ===
+      const newRow = [
         name,
+        email,
         getFormattedDate(joinDate),
         getFormattedDate(probationEndDate),
         getFormattedDate(probationNotifyDate),
-      ]);
+      ];
+
+      // Append the row first
+      const appendRowIndex = probationSheet.getLastRow() + 1;
+      probationSheet.appendRow(newRow);
+
+      // Set dropdown for "Result" column
+      const resultColIndex = probIndex["result"] + 1; // +1 because sheet ranges are 1-based
+      const resultCell = probationSheet.getRange(
+        appendRowIndex,
+        resultColIndex
+      );
+
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["Probation Passed", "Probation Not Passed"], true)
+        .setAllowInvalid(false)
+        .build();
+
+      resultCell.setDataValidation(rule);
     }
 
     // === ✅ On actual end date → Send "Probation Passed" email ===

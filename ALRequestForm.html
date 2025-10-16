@@ -14,7 +14,8 @@
       border: 1px solid #ccc;
     }
 
-    h1, h2 {
+    h1,
+    h2 {
       text-align: center;
     }
 
@@ -25,7 +26,8 @@
     }
 
     input,
-    select {
+    select,
+    textarea {
       width: 100%;
       padding: 10px;
       margin-top: 5px;
@@ -77,8 +79,14 @@
       }
     }
 
-    option {
-      margin-bottom: 5px;
+    .optionButtons {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .optionButtons button {
+      width: 45%;
+      margin: 5px;
     }
   </style>
 </head>
@@ -95,7 +103,14 @@
     <div id="emailError" style="color: red; text-align: center;"></div>
   </div>
 
-  <!-- Phase 2: Full leave form -->
+  <!-- Phase 2: Option buttons for probation -->
+  <div id="probationOptions" class="hidden optionButtons">
+    <p>Please choose an action:</p>
+    <button type="button" id="requestLeaveBtn">Request Leave</button>
+    <button type="button" id="probationFeedbackBtn">Provide Probation Feedback</button>
+  </div>
+
+  <!-- Phase 3: Full leave form -->
   <form id="leaveForm" class="hidden">
     <label for="empName">Employee Name</label>
     <input type="text" id="empName" name="empName" readonly />
@@ -109,11 +124,11 @@
 
     <label for="leaveType">Type of Leave</label>
     <select id="leaveType" required>
-        <option value="">Select Leave Type</option>
-        <option value="Annual Leave">Annual Leave</option>
-        <option value="Sick Leave">Sick Leave</option>
-        <option value="Compensatory Days Off">Compensatory Days Off</option>
-      </select>
+      <option value="">Select Leave Type</option>
+      <option value="Annual Leave">Annual Leave</option>
+      <option value="Sick Leave">Sick Leave</option>
+      <option value="Compensatory Days Off">Compensatory Days Off</option>
+    </select>
 
     <label for="responsibleColleague">Responsible Colleague</label>
     <small style="color:gray; font-style:italic;">
@@ -123,110 +138,188 @@
 
     <label for="teamLead">Approving Team Lead</label>
     <select id="teamLead" required>
-        <option value="">Select Team Lead</option>
-      </select>
+      <option value="">Select Team Lead</option>
+    </select>
 
     <label for="vacationType">Type of Vacation</label>
     <select id="vacationType" required>
-        <option value="Paid" selected>Paid</option>
-        <option value="Unpaid">Unpaid</option>
-      </select>
+      <option value="Paid" selected>Paid</option>
+      <option value="Unpaid">Unpaid</option>
+    </select>
 
     <button type="submit" id="submitBtn">Submit</button>
+  </form>
+
+  <!-- Phase 4: Probation Feedback form -->
+  <form id="feedbackForm" class="hidden">
+    <h2 style="text-align:center;">Probation Feedback Form</h2>
+    <input type="hidden" id="feedbackEmail" name="feedbackEmail" />
+
+    <label for="feedbackFor">For whom are you giving feedback?</label>
+    <select id="feedbackFor" name="feedbackFor" required>
+      <option value="">Select an option</option>
+      <option value="self">Myself</option>
+      <option value="colleague">Colleague</option>
+    </select>
+
+    <label for="colleagueName">Colleague Name (optional)</label>
+    <input type="text" id="colleagueName" name="colleagueName" placeholder="Enter colleague name if applicable" />
+
+    <label for="feedbackText">Your Feedback</label>
+    <textarea id="feedbackText" name="feedbackText" rows="5" required></textarea>
+
+    <button type="submit">Submit Feedback</button>
   </form>
 
   <div id="status"></div>
 
   <script>
     function loadForm() {
-        const email = document.getElementById("emailInput").value.trim();
-        const errorDiv = document.getElementById("emailError");
-        errorDiv.textContent = "";
+      const email = document.getElementById("emailInput").value.trim();
+      const errorDiv = document.getElementById("emailError");
+      errorDiv.textContent = "";
 
-        if (!email) {
-          errorDiv.textContent = "Please enter a valid email.";
-          return;
-        }
-
-        const btn = document.getElementById("loadFormBtn");
-        btn.disabled = true;
-        btn.innerHTML = 'Getting AL Request Form... <span class="spinner"></span>';
-
-        google.script.run
-          .withSuccessHandler((data) => {
-            // Populate form with fetched data
-            document.getElementById("empName").value = data.empName;
-            document.getElementById("empEmail").value = data.empEmail;
-
-            const colleagueSelect = document.getElementById("responsibleColleague");
-            colleagueSelect.innerHTML = "";
-            data.colleagues.forEach((col) => {
-              const opt = document.createElement("option");
-              opt.value = col;
-              opt.textContent = col;
-              colleagueSelect.appendChild(opt);
-            });
-
-            const teamLeadSelect = document.getElementById("teamLead");
-            teamLeadSelect.innerHTML = `<option value="">Select Team Lead</option>`;
-            data.teamLeads.forEach((lead) => {
-              const opt = document.createElement("option");
-              opt.value = lead.email;
-              opt.textContent = lead.name;
-              teamLeadSelect.appendChild(opt);
-            });
-
-            document.getElementById("emailSection").classList.add("hidden");
-            document.getElementById("leaveForm").classList.remove("hidden");
-          })
-          .withFailureHandler((err) => {
-            errorDiv.textContent = err.message || "Failed to fetch employee data.";
-            btn.disabled = false;
-            btn.innerHTML = "Continue";
-          })
-          .getEmployeeData(email);
+      if (!email) {
+        errorDiv.textContent = "Please enter a valid email.";
+        return;
       }
 
-      // Handle leave form submission
-      document.getElementById("leaveForm").addEventListener("submit", function (e) {
-        e.preventDefault();
+      const btn = document.getElementById("loadFormBtn");
+      btn.disabled = true;
+      btn.innerHTML = 'Loading... <span class="spinner"></span>';
 
-        const btn = document.getElementById("submitBtn");
-        btn.disabled = true;
-        btn.innerHTML = 'Submitting... <span class="spinner"></span>';
+      google.script.run
+        .withSuccessHandler((data) => {
+          btn.disabled = false;
+          btn.innerHTML = 'Continue';
 
-        const formData = {
-          empName: document.getElementById("empName").value,
-          empEmail: document.getElementById("empEmail").value,
-          startDate: document.getElementById("startDate").value,
-          daysCount: document.getElementById("daysCount").value,
-          leaveType: document.getElementById("leaveType").value,
-          responsibleColleague: Array.from(document.getElementById("responsibleColleague").selectedOptions).map(o => o.value).join(","),
-          teamLead: document.getElementById("teamLead").value,
-          vacationType: document.getElementById("vacationType").value,
-        };
+          document.getElementById("empEmail").value = data.empEmail;
+          document.getElementById("feedbackEmail").value = data.empEmail;
 
-        google.script.run
-          .withSuccessHandler((data) => {
-            btn.disabled = false;
-            btn.innerHTML = "Submit";
-            document.getElementById("leaveForm").reset();
-            if(data.error) {
-              document.getElementById("status").textContent = data.error;
-              document.getElementById("status").style.color = "red";
-            } else {
-              document.getElementById("status").textContent = data.message;
-              document.getElementById("status").style.color = "green";
-            }
-          })
-          .withFailureHandler((err) => {
-            document.getElementById("status").textContent = "Error: " + err.message;
-            document.getElementById("status").style.color = "red";
-            btn.disabled = false;
-            btn.textContent = "Submit";
-          })
-          .sendAndUpdateALRequest(formData);
+          // If probation is false, show leave form directly
+          if (!data.probation) {
+            showLeaveForm(data);
+          } else {
+            // Show probation options buttons
+            document.getElementById("emailSection").classList.add("hidden");
+            document.getElementById("probationOptions").classList.remove("hidden");
+
+            document.getElementById("requestLeaveBtn").onclick = () => {
+              showLeaveForm(data);
+              document.getElementById("probationOptions").classList.add("hidden");
+            };
+
+            document.getElementById("probationFeedbackBtn").onclick = () => {
+              document.getElementById("probationOptions").classList.add("hidden");
+              document.getElementById("feedbackForm").classList.remove("hidden");
+            };
+          }
+        })
+        .withFailureHandler((err) => {
+          errorDiv.textContent = err.message || "Failed to fetch employee data.";
+          btn.disabled = false;
+        })
+        .getEmployeeData(email);
+    }
+
+    function showLeaveForm(data) {
+      document.getElementById("emailSection").classList.add("hidden");
+      document.getElementById("leaveForm").classList.remove("hidden");
+
+      document.getElementById("empName").value = data.empName;
+      document.getElementById("empEmail").value = data.empEmail;
+
+      // Populate colleagues
+      const colleagueSelect = document.getElementById("responsibleColleague");
+      colleagueSelect.innerHTML = "";
+      data.colleagues.forEach((col) => {
+        const opt = document.createElement("option");
+        opt.value = col;
+        opt.textContent = col;
+        colleagueSelect.appendChild(opt);
       });
+
+      // Populate team leads
+      const teamLeadSelect = document.getElementById("teamLead");
+      teamLeadSelect.innerHTML = `<option value="">Select Team Lead</option>`;
+      data.teamLeads.forEach((lead) => {
+        const opt = document.createElement("option");
+        opt.value = lead.email;
+        opt.textContent = lead.name;
+        teamLeadSelect.appendChild(opt);
+      });
+    }
+
+    // Handle leave form submission
+    document.getElementById("leaveForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.innerHTML = 'Submitting... <span class="spinner"></span>';
+
+      const formData = {
+        empName: document.getElementById("empName").value,
+        empEmail: document.getElementById("empEmail").value,
+        startDate: document.getElementById("startDate").value,
+        daysCount: document.getElementById("daysCount").value,
+        leaveType: document.getElementById("leaveType").value,
+        responsibleColleague: Array.from(document.getElementById("responsibleColleague").selectedOptions).map(o => o.value).join(","),
+        teamLead: document.getElementById("teamLead").value,
+        vacationType: document.getElementById("vacationType").value,
+      };
+
+      google.script.run
+        .withSuccessHandler((data) => {
+          btn.disabled = false;
+          btn.innerHTML = "Submit";
+          document.getElementById("leaveForm").reset();
+          if (data.error) {
+            document.getElementById("status").textContent = data.error;
+            document.getElementById("status").style.color = "red";
+          } else {
+            document.getElementById("status").textContent = data.message;
+            document.getElementById("status").style.color = "green";
+          }
+        })
+        .withFailureHandler((err) => {
+          document.getElementById("status").textContent = "Error: " + err.message;
+          document.getElementById("status").style.color = "red";
+          btn.disabled = false;
+          btn.textContent = "Submit";
+        })
+        .sendAndUpdateALRequest(formData);
+    });
+
+    // Handle feedback form submission
+    document.getElementById("feedbackForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const submitBtn = this.querySelector("button[type='submit']");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting...";
+
+      const feedbackData = {
+        empEmail: document.getElementById("feedbackEmail").value,
+        feedbackFor: document.getElementById("feedbackFor").value,
+        colleagueName: document.getElementById("colleagueName").value,
+        feedbackText: document.getElementById("feedbackText").value
+      };
+
+      google.script.run
+        .withSuccessHandler(() => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Submit Feedback";
+          document.getElementById("feedbackForm").reset();
+          document.getElementById("status").textContent = "Feedback submitted successfully.";
+          document.getElementById("status").style.color = "green";
+        })
+        .withFailureHandler((err) => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Submit Feedback";
+          document.getElementById("status").textContent = "Error: " + err.message;
+          document.getElementById("status").style.color = "red";
+        })
+        .submitProbationFeedback(feedbackData);
+    });
   </script>
 </body>
 

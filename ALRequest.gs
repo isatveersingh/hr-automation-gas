@@ -49,11 +49,29 @@ const getEmployeeData = (email) => {
     // === 🔹 Team Leads ===
     const teamLeads = getTeamLeadList(); // uses dynamic indexing already
 
+    const today = new Date();
+    const joinDate = parseDate(emp[empCol["join_date"]]);
+    const probationEndDate = new Date(joinDate);
+    probationEndDate.setMonth(probationEndDate.getMonth() + 3);
+
+    const oneMonthAfterProbation = new Date(probationEndDate);
+    oneMonthAfterProbation.setMonth(oneMonthAfterProbation.getMonth() + 1);
+
+    let probation = false;
+
+    if (
+      today.getTime() >= probationEndDate.getTime() &&
+      today.getTime() <= oneMonthAfterProbation.getTime()
+    ) {
+      probation = true;
+    }
+
     return {
       empName: (emp[empCol["name"]] || "").toString().trim(),
       empEmail: (emp[empCol["email"]] || "").toString().trim(),
       colleagues,
       teamLeads,
+      probation,
     };
   } catch (err) {
     Logger.log("Error in getEmployeeData: " + err);
@@ -288,6 +306,87 @@ const sendAndUpdateALRequest = ({
     return {
       error:
         "Something went wrong. Could not submit the request. Please contact HR Department.",
+    };
+  }
+};
+
+const submitProbationFeedback = (data) => {
+  try {
+    const { empEmail, feedbackFor, colleagueName, feedbackText } = data;
+
+    if (!empEmail || !feedbackText || !feedbackFor) {
+      throw new Error("Missing required feedback fields.");
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const probationSheet = spreadsheet.getSheetByName(PROBATION_SHEET);
+
+    if (!probationSheet) {
+      throw new Error("Probation sheet not found.");
+    }
+
+    // Get headers dynamically
+    const headers = probationSheet
+      .getRange(1, 1, 1, probationSheet.getLastColumn())
+      .getValues()[0];
+    const colIndex = {};
+    headers.forEach((h, i) => {
+      colIndex[h.toString().trim().toLowerCase().replace(/\s+/g, "_")] = i;
+    });
+
+    // Read all rows
+    const rows = probationSheet
+      .getRange(
+        2,
+        1,
+        probationSheet.getLastRow() - 1,
+        probationSheet.getLastColumn()
+      )
+      .getValues();
+
+    // Find employee row
+    const rowIndex = rows.findIndex(
+      (row) =>
+        row[colIndex["employee_email"]].toString().trim() === empEmail.trim()
+    );
+
+    if (rowIndex === -1) {
+      throw new Error("Employee not found in probation sheet.");
+    }
+
+    // Determine which columns to update
+    const feedbackCol = colIndex["employee_feedback"];
+    const feedbackForCol = colIndex["feedback_for"];
+    const colleagueNameCol = colIndex["collegue_name_(if_applicable)"];
+
+    // Prepare updated row data
+    const updateRow = [];
+    updateRow[feedbackCol] = feedbackText;
+    updateRow[feedbackForCol] = feedbackFor;
+    updateRow[colleagueNameCol] =
+      feedbackFor === "colleague" ? colleagueName || "" : "";
+
+    // Write back to sheet
+    const writeRange = probationSheet.getRange(
+      rowIndex + 2,
+      1,
+      1,
+      probationSheet.getLastColumn()
+    );
+    const currentRow = rows[rowIndex];
+
+    // Merge updated values with current row
+    updateRow.forEach((val, i) => {
+      if (val !== undefined) currentRow[i] = val;
+    });
+
+    writeRange.setValues([currentRow]);
+
+    return { message: "Feedback submitted successfully." };
+  } catch (err) {
+    Logger.log(err);
+    return {
+      error: err.message || "Failed to submit feedback. Please contact HR.",
     };
   }
 };
