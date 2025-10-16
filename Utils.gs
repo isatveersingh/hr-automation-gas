@@ -1,5 +1,76 @@
 // Utility functions for date parsing, formatting, and HR logic
 
+const getColumnIndexes = (sheet) => {
+  // Get all headers (first row)
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  const colIndex = {};
+
+  headers.forEach((header, i) => {
+    // Normalize header:
+    // - trim leading/trailing spaces
+    // - replace multiple spaces/tabs with single underscore
+    // - convert to lowercase
+    const normalized = header.trim().replace(/\s+/g, "_").toLowerCase();
+
+    colIndex[normalized] = i; // zero-based index for arrays
+  });
+
+  return colIndex;
+};
+
+const getHRList = (sheetName = "Settings") => {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const col = getColumnIndexes(sheet);
+  const data = sheet.getDataRange().getValues().slice(1); // skip header
+
+  const hrList = data
+    .filter((r) => r[col["hr_name"]] || r[col["hr_email"]])
+    .map((r) => ({
+      name: r[col["hr_name"]],
+      email: r[col["hr_email"]],
+    }))
+    .filter((h) => h.email); // only keep those with email
+
+  return hrList;
+};
+
+const getTeamLeadList = (sheetName = "Settings") => {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const col = getColumnIndexes(sheet);
+  const data = sheet.getDataRange().getValues().slice(1);
+
+  const teamLeads = data
+    .filter((r) => r[col["team_lead_name"]] || r[col["team_lead_email"]])
+    .map((r) => ({
+      name: r[col["team_lead_name"]],
+      email: r[col["team_lead_email"]],
+    }))
+    .filter((tl) => tl.email);
+
+  return teamLeads;
+};
+
+const getEmailTemplates = (sheetName = "Settings") => {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const col = getColumnIndexes(sheet);
+  const data = sheet.getDataRange().getValues().slice(1);
+
+  const templates = data
+    .filter(
+      (r) =>
+        r[col["email_code"]] || r[col["email_subject"]] || r[col["email_body"]]
+    )
+    .map((r) => ({
+      code: r[col["email_code"]],
+      subject: r[col["email_subject"]],
+      body: r[col["email_body"]],
+    }))
+    .filter((t) => t.code);
+
+  return templates;
+};
+
 /**
  * Parses a date string or Date object into a Date object.
  * Supports "dd/mm/yyyy", "dd-mm-yyyy", "dd.mm.yyyy" formats.
