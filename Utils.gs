@@ -71,6 +71,14 @@ const getEmailTemplates = (sheetName = "Settings") => {
   return templates;
 };
 
+const getEmployees = () => {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(EMPLOYEES_SHEET);
+  const col = getColumnIndexes(sheet);
+  const data = sheet.getDataRange().getValues().slice(1); // skip header row
+  return { sheet, col, data };
+};
+
 const fillTemplate = (template, map) => {
   let result = template.toString();
   for (const key in map) {

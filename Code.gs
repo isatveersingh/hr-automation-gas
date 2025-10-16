@@ -3,78 +3,82 @@
  */
 
 const sendBirthdayNotifications = () => {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-  const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const empSheet = ss.getSheetByName(EMPLOYEES_SHEET);
+    const settingSheet = ss.getSheetByName(SETTINGS_SHEET);
 
-  const emplastrow = empsheet.getLastRow();
-  const employees = empsheet.getRange(`A2:H${emplastrow}`).getValues();
-  const hrEmails = settingsheet
-    .getRange("A2:B")
-    .getValues()
-    .filter((row) => row[0].toString().trim() !== "")
-    .map((row) => row[1]);
+    if (!empSheet || !settingSheet)
+      throw new Error("Missing Employees or Settings sheet.");
 
-  const emailTemplates = settingsheet.getRange("E2:G").getValues();
+    // === 🔹 Dynamic indexing ===
+    const empCol = getColumnIndexes(empSheet);
+    const employees = empSheet.getDataRange().getValues().slice(1);
 
-  const birthdayEmail = emailTemplates.find(
-    (row) => row[0].toString().trim() === "BIRTHDAY_ALERT"
-  );
-  const birthdayHREmail = emailTemplates.find(
-    (row) => row[0].toString().trim() === "BIRTHDAY_ALERT_HR"
-  );
+    const hrEmails = getHRList().map((h) => h.email);
 
-  const today = new Date();
+    const templates = getEmailTemplates().reduce((acc, t) => {
+      acc[t.code] = t;
+      return acc;
+    }, {});
 
-  for (let emp of employees) {
-    const [name, email, birthdayStr] = emp;
+    const birthdayEmail = templates.BIRTHDAY_ALERT;
+    const birthdayHREmail = templates.BIRTHDAY_ALERT_HR;
 
-    if (name.toString().trim() === "") {
-      continue;
-    }
+    if (!birthdayEmail || !birthdayHREmail)
+      throw new Error("Missing BIRTHDAY_ALERT or BIRTHDAY_ALERT_HR templates.");
 
-    const birthday = parseDate(birthdayStr);
-    const thisYearBirthday = new Date(
-      today.getFullYear(),
-      birthday.getMonth(),
-      birthday.getDate()
-    );
+    const today = new Date();
 
-    const thisYearBirthdayFormatted = getFormattedDate(thisYearBirthday);
+    employees.forEach((emp) => {
+      const name = (emp[empCol["name"]] || "").toString().trim();
+      const email = (emp[empCol["email"]] || "").toString().trim();
+      const birthdayStr = emp[empCol["birthday"]];
 
-    if (isSameDayMonthYear(today, thisYearBirthday)) {
-      const colleagues = employees
-        .filter((e) => e[1] !== email)
-        .map((e) => e[1]);
+      if (!name || !email || !birthdayStr) return;
 
-      const subject = birthdayEmail[1]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
-      const body = birthdayEmail[2]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[BIRTHDAY\]/gi, thisYearBirthdayFormatted);
+      const birthday = parseDate(birthdayStr);
+      const thisYearBirthday = new Date(
+        today.getFullYear(),
+        birthday.getMonth(),
+        birthday.getDate()
+      );
+      const birthdayFormatted = getFormattedDate(thisYearBirthday);
 
-      for (let coll of colleagues) {
-        sendEmail(coll, subject, body);
+      // === 🎉 Notify colleagues on birthday ===
+      if (isSameDayMonthYear(today, thisYearBirthday)) {
+        const colleagues = employees
+          .filter((e) => (e[empCol["email"]] || "").toString().trim() !== email)
+          .map((e) => e[empCol["email"]].toString().trim())
+          .filter(Boolean);
+
+        const subject = fillTemplate(birthdayEmail.subject, { EMP_NAME: name });
+        const body = fillTemplate(birthdayEmail.body, {
+          EMP_NAME: name,
+          BIRTHDAY: birthdayFormatted,
+        });
+
+        colleagues.forEach((coll) => sendEmail(coll, subject, body));
+        Logger.log(`Birthday email sent to colleagues of ${name}`);
       }
-    }
 
-    const notifydate = getPreviousWorkingDay(thisYearBirthday);
+      // === 📅 Notify HR day before birthday (previous working day) ===
+      const notifyDate = getPreviousWorkingDay(thisYearBirthday);
+      if (isSameDayMonthYear(today, notifyDate)) {
+        const subject = fillTemplate(birthdayHREmail.subject, {
+          EMP_NAME: name,
+        });
+        const body = fillTemplate(birthdayHREmail.body, {
+          EMP_NAME: name,
+          BIRTHDAY: birthdayFormatted,
+        });
 
-    if (isSameDayMonthYear(today, notifydate)) {
-      const subject = birthdayHREmail[1]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
-      const body = birthdayHREmail[2]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[BIRTHDAY\]/gi, thisYearBirthdayFormatted);
-
-      for (let hr of hrEmails) {
-        sendEmail(hr, subject, body);
+        hrEmails.forEach((hr) => sendEmail(hr, subject, body));
+        Logger.log(`Birthday HR notification sent for ${name}`);
       }
-    }
+    });
+  } catch (err) {
+    Logger.log("Error in sendBirthdayNotifications: " + err);
   }
 };
 
@@ -82,76 +86,95 @@ const sendBirthdayNotifications = () => {
  * Sends quarterly leave reminders to employees and HR.
  */
 const sendQuarterlyLeaveReminders = () => {
-  if (!isTodayQuarterlyReminderDate()) return;
+  try {
+    if (!isTodayQuarterlyReminderDate()) return;
 
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-  const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const empSheet = ss.getSheetByName(EMPLOYEES_SHEET);
+    const settingSheet = ss.getSheetByName(SETTINGS_SHEET);
 
-  const emplastrow = empsheet.getLastRow();
-  const employees = empsheet.getRange(`A2:H${emplastrow}`).getValues();
+    if (!empSheet || !settingSheet)
+      throw new Error("Missing Employees or Settings sheet.");
 
-  const hrEmails = settingsheet
-    .getRange("A2:B")
-    .getValues()
-    .filter((row) => row[0].toString().trim() !== "")
-    .map((row) => row[1]);
-  const emailTemplates = settingsheet.getRange("E2:G").getValues();
+    // === 🔹 Dynamic column indexing ===
+    const empCol = getColumnIndexes(empSheet);
+    const employees = empSheet.getDataRange().getValues().slice(1);
 
-  const quarterlyAlReminderEmail = emailTemplates.find(
-    (row) => row[0].toString().trim() === "QUARTERLY_AL_REMINDER"
-  );
-  const obligatoryALReminder = emailTemplates.find(
-    (row) => row[0].toString().trim() === "HR_OBLIGATORY_AL_REMINDER"
-  );
+    const hrEmails = getHRList().map((h) => h.email);
 
-  const alRequestForm =
-    PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM");
+    const templates = getEmailTemplates().reduce((acc, t) => {
+      acc[t.code] = t;
+      return acc;
+    }, {});
 
-  for (let emp of employees) {
-    const [
-      name,
-      email,
-      _birthdayStr,
-      _joinDateStr,
-      totalLeaves,
-      leavesUsed,
-      remainingLeaves,
-    ] = emp;
+    const quarterlyALTemplate = templates.QUARTERLY_AL_REMINDER;
+    const obligatoryALTemplate = templates.HR_OBLIGATORY_AL_REMINDER;
 
-    if (name.toString().trim() === "") {
-      continue;
-    }
+    if (!quarterlyALTemplate || !obligatoryALTemplate)
+      throw new Error(
+        "Missing QUARTERLY_AL_REMINDER or HR_OBLIGATORY_AL_REMINDER templates."
+      );
 
-    const subject = quarterlyAlReminderEmail[1]
-      .toString()
-      .replace(/\[EMP_NAME\]/gi, name);
+    const alRequestForm =
+      PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM") ||
+      "";
 
-    const body = quarterlyAlReminderEmail[2]
-      .toString()
-      .replace(/\[EMP_NAME\]/gi, name)
-      .replace(/\[AL_REQUEST_FORM\]/gi, alRequestForm)
-      .replace(/\[TOTAL_AL\]/gi, totalLeaves || 0)
-      .replace(/\[AL_USED\]/gi, leavesUsed || 0)
-      .replace(/\[AL_REMAINING\]/gi, remainingLeaves || 0);
+    // === 🔹 Validate required employee columns ===
+    const requiredEmpCols = [
+      "name",
+      "email",
+      "total_leaves",
+      "leaves_used",
+      "remaining_leaves",
+    ];
+    requiredEmpCols.forEach((c) => {
+      if (empCol[c] == null)
+        throw new Error(`Missing '${c}' column in Employees sheet.`);
+    });
 
-    sendEmail(email, subject, body);
+    // === 🔹 Process each employee ===
+    employees.forEach((emp) => {
+      const name = (emp[empCol["name"]] || "").toString().trim();
+      const email = (emp[empCol["email"]] || "").toString().trim();
+      const totalLeaves = emp[empCol["total_leaves"]] || 0;
+      const leavesUsed = emp[empCol["leaves_used"]] || 0;
+      const remainingLeaves = emp[empCol["remaining_leaves"]] || 0;
 
-    if (parseInt(leavesUsed || 0) < 14) {
-      const hrSubject = obligatoryALReminder[1]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
-      const hrBody = obligatoryALReminder[2]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[TOTAL_AL\]/gi, totalLeaves || 0)
-        .replace(/\[AL_USED\]/gi, leavesUsed || 0)
-        .replace(/\[AL_REMAINING\]/gi, remainingLeaves || 0);
+      if (!name || !email) return;
 
-      for (let hr of hrEmails) {
-        sendEmail(hr, hrSubject, hrBody);
+      // === 📧 Send quarterly AL reminder to employee ===
+      const subject = fillTemplate(quarterlyALTemplate.subject, {
+        EMP_NAME: name,
+      });
+      const body = fillTemplate(quarterlyALTemplate.body, {
+        EMP_NAME: name,
+        AL_REQUEST_FORM: alRequestForm,
+        TOTAL_AL: totalLeaves,
+        AL_USED: leavesUsed,
+        AL_REMAINING: remainingLeaves,
+      });
+
+      sendEmail(email, subject, body);
+      Logger.log(`Quarterly AL reminder sent to ${name}`);
+
+      // === 📧 Notify HR if leaves used < 14 ===
+      if (parseInt(leavesUsed) < 14) {
+        const hrSubject = fillTemplate(obligatoryALTemplate.subject, {
+          EMP_NAME: name,
+        });
+        const hrBody = fillTemplate(obligatoryALTemplate.body, {
+          EMP_NAME: name,
+          TOTAL_AL: totalLeaves,
+          AL_USED: leavesUsed,
+          AL_REMAINING: remainingLeaves,
+        });
+
+        hrEmails.forEach((hr) => sendEmail(hr, hrSubject, hrBody));
+        Logger.log(`HR notified for ${name} (leaves used < 14)`);
       }
-    }
+    });
+  } catch (err) {
+    Logger.log("Error in sendQuarterlyLeaveReminders: " + err);
   }
 };
 
@@ -161,65 +184,104 @@ const sendQuarterlyLeaveReminders = () => {
  */
 
 const manageAnnualLeaves = () => {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-  const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const empSheet = ss.getSheetByName(EMPLOYEES_SHEET);
+    const settingSheet = ss.getSheetByName(SETTINGS_SHEET);
 
-  const emplastrow = empsheet.getLastRow();
-  const employees = empsheet.getRange(`A2:H${emplastrow}`).getValues();
+    if (!empSheet || !settingSheet)
+      throw new Error("Missing Employees or Settings sheet.");
 
-  const emailTemplates = settingsheet.getRange("E2:G").getValues();
+    // === 🔹 Dynamic column indexing ===
+    const empCol = getColumnIndexes(empSheet);
+    const employees = empSheet.getDataRange().getValues().slice(1);
 
-  const alResetAnniversaryEmail = emailTemplates.find(
-    (row) => row[0].toString().trim() === "AL_RESET_ANNIVERSARY"
-  );
+    const templates = getEmailTemplates().reduce((acc, t) => {
+      acc[t.code] = t;
+      return acc;
+    }, {});
 
-  const sixMonthsEmail = emailTemplates.find(
-    (row) => row[0].toString().trim() === "SIX_MONTH_AL_REMINDER"
-  );
+    const sixMonthsEmail = templates.SIX_MONTH_AL_REMINDER;
+    const alResetAnniversaryEmail = templates.AL_RESET_ANNIVERSARY;
 
-  const alRequestForm =
-    PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM");
+    if (!sixMonthsEmail || !alResetAnniversaryEmail)
+      throw new Error(
+        "Missing SIX_MONTH_AL_REMINDER or AL_RESET_ANNIVERSARY templates."
+      );
 
-  for (let i = 0; i < employees.length; i++) {
-    const [name, email, _birthdayStr, joinDateStr] = employees[i];
+    const alRequestForm =
+      PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM") ||
+      "";
 
-    if (name.toString().trim() === "") {
-      continue;
-    }
+    // === 🔹 Validate required employee columns ===
+    const requiredEmpCols = [
+      "name",
+      "email",
+      "join_date",
+      "total_leaves",
+      "leaves_used",
+      "remaining_leaves",
+    ];
+    requiredEmpCols.forEach((c) => {
+      if (empCol[c] == null)
+        throw new Error(`Missing '${c}' column in Employees sheet.`);
+    });
 
-    const joinDate = parseDate(joinDateStr);
+    // === 🔹 Process each employee ===
+    employees.forEach((row, idx) => {
+      const name = (row[empCol["name"]] || "").toString().trim();
+      const email = (row[empCol["email"]] || "").toString().trim();
+      const joinDateStr = row[empCol["join_date"]];
 
-    if (isSixMonthComplete(joinDate)) {
-      empsheet.getRange(`E${i + 2}:G${i + 2}`).setValues([[21, 0, 21]]);
+      if (!name || !email || !joinDateStr) return;
 
-      const subject = sixMonthsEmail[1]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
+      const joinDate = parseDate(joinDateStr);
 
-      const body = sixMonthsEmail[2]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[AL_REQUEST_FORM\]/gi, alRequestForm);
+      // --- 6-month AL reminder ---
+      if (isSixMonthComplete(joinDate)) {
+        // Update leaves: Total 21, Used 0, Remaining 21
+        empSheet
+          .getRange(idx + 2, empCol["total_leaves"] + 1, 1, 3)
+          .setValues([[21, 0, 21]]);
 
-      sendEmail(email, subject, body);
-    }
+        const subject = fillTemplate(sixMonthsEmail.subject, {
+          EMP_NAME: name,
+        });
+        const body = fillTemplate(sixMonthsEmail.body, {
+          EMP_NAME: name,
+          AL_REQUEST_FORM: alRequestForm,
+        });
 
-    if (isAnniversary(joinDate)) {
-      empsheet.getRange(`E${i + 2}:G${i + 2}`).setValues([[21, 0, 21]]);
-      const years = anniversaryYears(joinDate);
-      const subject = alResetAnniversaryEmail[1]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
+        sendEmail(email, subject, body);
+        Logger.log(`Six-month AL reminder sent to ${name}`);
+      }
 
-      const body = alResetAnniversaryEmail[2]
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[ANNIVERSARY_YEARS\]/gi, years)
-        .replace(/\[AL_REQUEST_FORM\]/gi, alRequestForm);
+      // --- Anniversary AL reset ---
+      if (isAnniversary(joinDate)) {
+        // Update leaves: Total 21, Used 0, Remaining 21
+        empSheet
+          .getRange(idx + 2, empCol["total_leaves"] + 1, 1, 3)
+          .setValues([[21, 0, 21]]);
 
-      sendEmail(email, subject, body);
-    }
+        const years = anniversaryYears(joinDate);
+
+        const subject = fillTemplate(alResetAnniversaryEmail.subject, {
+          EMP_NAME: name,
+        });
+        const body = fillTemplate(alResetAnniversaryEmail.body, {
+          EMP_NAME: name,
+          ANNIVERSARY_YEARS: years,
+          AL_REQUEST_FORM: alRequestForm,
+        });
+
+        sendEmail(email, subject, body);
+        Logger.log(
+          `Anniversary AL reset email sent to ${name} (${years} years)`
+        );
+      }
+    });
+  } catch (err) {
+    Logger.log("Error in manageAnnualLeaves: " + err);
   }
 };
 
@@ -229,19 +291,18 @@ const manageProbationPeriod = () => {
   const probationSheet = ss.getSheetByName(PROBATION_SHEET);
 
   if (!empSheet || !probationSheet)
-    throw new Error("One or more required sheets are missing.");
+    throw new Error("Missing required sheet(s): Employees or Probation.");
 
   // === 🔹 Get data and dynamic column indexes ===
   const empIndex = getColumnIndexes(empSheet);
   const probIndex = getColumnIndexes(probationSheet);
-
   const employees = empSheet.getDataRange().getValues().slice(1);
   const probationData = probationSheet.getDataRange().getValues().slice(1);
 
   const hrEmails = getHRList();
   const emailTemplates = getEmailTemplates();
 
-  // === 🔹 Validate templates ===
+  // === 🔹 Template mapping for fast lookup ===
   const templates = emailTemplates.reduce((acc, t) => {
     acc[t.code] = t;
     return acc;
@@ -260,19 +321,25 @@ const manageProbationPeriod = () => {
   const requiredEmpCols = ["name", "email", "join_date", "department"];
   requiredEmpCols.forEach((c) => {
     if (empIndex[c] == null)
-      throw new Error(`Missing '${c}' column in Employees sheet`);
+      throw new Error(`Missing '${c}' column in Employees sheet.`);
   });
 
   const requiredProbCols = ["employee_name", "result"];
   requiredProbCols.forEach((c) => {
     if (probIndex[c] == null)
-      throw new Error(`Missing '${c}' column in Probation sheet`);
+      throw new Error(`Missing '${c}' column in Probation sheet.`);
   });
 
-  // === 🔹 Process employees ===
+  // === 🔹 Helpers (now imported from utils) ===
+  // fillTemplate(templateString, replacements)
+  // isSameDayMonthYear(date1, date2)
+  // getFormattedDate(date)
+  // parseDate(dateString)
+
   const today = new Date();
   const newProbationRows = [];
 
+  // === 🔹 Iterate employees ===
   employees.forEach((row) => {
     const name = (row[empIndex["name"]] || "").toString().trim();
     const email = (row[empIndex["email"]] || "").toString().trim();
@@ -282,7 +349,7 @@ const manageProbationPeriod = () => {
       .trim()
       .toLowerCase();
 
-    if (!name || !email || !joinDateStr) return; // skip incomplete rows
+    if (!name || !email || !joinDateStr) return;
 
     const joinDate = parseDate(joinDateStr);
     const probationEndDate = new Date(joinDate);
@@ -291,20 +358,20 @@ const manageProbationPeriod = () => {
     const probationNotifyDate = new Date(probationEndDate);
     probationNotifyDate.setDate(probationNotifyDate.getDate() - 7);
 
-    // === 📅 Notify HR & Team Leads 7 days before probation ends ===
+    const commonMap = {
+      EMP_NAME: name,
+      JOIN_DATE: getFormattedDate(joinDate),
+      PROBATION_END_DATE: getFormattedDate(probationEndDate),
+    };
+
+    // === 📅 Notify HR & TL before probation end ===
     if (isSameDayMonthYear(today, probationNotifyDate)) {
-      const commonMap = {
-        EMP_NAME: name,
-        JOIN_DATE: getFormattedDate(joinDate),
-        PROBATION_END_DATE: getFormattedDate(probationEndDate),
-      };
+      // HR Notification
+      const hrSubject = fillTemplate(probationHRnotify.subject, commonMap);
+      const hrBody = fillTemplate(probationHRnotify.body, commonMap);
+      hrEmails.forEach((hr) => sendEmail(hr.email, hrSubject, hrBody));
 
-      const subject = fillTemplate(probationHRnotify.subject, commonMap);
-      const body = fillTemplate(probationHRnotify.body, commonMap);
-
-      hrEmails.forEach((hr) => sendEmail(hr.email, subject, body));
-      Logger.log(`Probation HR notify sent for ${name}`);
-
+      // TL Notification (by department)
       const depLead =
         department === "service"
           ? SERVICE_DEP_LEAD
@@ -313,16 +380,10 @@ const manageProbationPeriod = () => {
           : null;
 
       if (depLead) {
-        const tlMap = {
-          ...commonMap,
-          TEAMLEAD_NAME: depLead.name,
-        };
-
+        const tlMap = { ...commonMap, TEAMLEAD_NAME: depLead.name };
         const tlSubject = fillTemplate(probationTeamleadNotify.subject, tlMap);
         const tlBody = fillTemplate(probationTeamleadNotify.body, tlMap);
-
         sendEmail(depLead.email, tlSubject, tlBody);
-        Logger.log(`Team lead notify sent for ${name} (${depLead.name})`);
       }
 
       newProbationRows.push([
@@ -333,14 +394,14 @@ const manageProbationPeriod = () => {
       ]);
     }
 
-    // === ✅ On actual probation end date, send "passed" email ===
+    // === ✅ On actual end date → Send "Probation Passed" email ===
     if (isSameDayMonthYear(today, probationEndDate)) {
-      const empProbationRow = probationData.find(
+      const empProbRow = probationData.find(
         (r) => (r[probIndex["employee_name"]] || "").toString().trim() === name
       );
 
-      if (empProbationRow) {
-        const result = (empProbationRow[probIndex["result"]] || "")
+      if (empProbRow) {
+        const result = (empProbRow[probIndex["result"]] || "")
           .toString()
           .toLowerCase();
 
@@ -359,7 +420,6 @@ const manageProbationPeriod = () => {
           const body = fillTemplate(probationPassEmail.body, passMap);
 
           sendEmail(email, subject, body);
-          Logger.log(`Probation pass email sent to ${name} (${email})`);
         }
       }
     }

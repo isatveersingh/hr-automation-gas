@@ -11,33 +11,54 @@ const doGet = () => {
  * Fetches employee data, colleagues, and team leads for the form.
  */
 const getEmployeeData = (email) => {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-  const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const empSheet = ss.getSheetByName(EMPLOYEES_SHEET);
+    const settingSheet = ss.getSheetByName(SETTINGS_SHEET);
 
-  const emplastrow = empsheet.getLastRow();
-  const employees = empsheet
-    .getRange(`A2:H${emplastrow}`)
-    .getValues()
-    .filter((row) => row[0].toString().trim() !== "");
+    if (!empSheet || !settingSheet)
+      throw new Error("Missing Employees or Settings sheet.");
 
-  const emp = employees.find((row) => row[1].toString().trim() === email);
-  const colleagues = employees
-    .filter((row) => row[1].toString().trim() !== email)
-    .map((row) => row[0]);
+    // === 🔹 Dynamic indexing ===
+    const empCol = getColumnIndexes(empSheet);
+    const employees = empSheet
+      .getDataRange()
+      .getValues()
+      .slice(1)
+      .filter((row) => (row[empCol["name"]] || "").toString().trim() !== "");
 
-  const teamLeads = settingsheet
-    .getRange("C2:D")
-    .getValues()
-    .filter((row) => row[0].toString().trim() !== "")
-    .map((row) => ({ name: row[0], email: row[1] }));
+    // === 🔹 Find employee ===
+    const emp = employees.find(
+      (row) =>
+        (row[empCol["email"]] || "").toString().trim().toLowerCase() ===
+        email.toLowerCase()
+    );
 
-  return {
-    empName: emp[0],
-    empEmail: emp[1],
-    colleagues,
-    teamLeads,
-  };
+    if (!emp) throw new Error(`Employee with email "${email}" not found.`);
+
+    // === 🔹 Colleagues (exclude self) ===
+    const colleagues = employees
+      .filter(
+        (row) =>
+          (row[empCol["email"]] || "").toString().trim().toLowerCase() !==
+          email.toLowerCase()
+      )
+      .map((row) => (row[empCol["name"]] || "").toString().trim())
+      .filter(Boolean);
+
+    // === 🔹 Team Leads ===
+    const teamLeads = getTeamLeadList(); // uses dynamic indexing already
+
+    return {
+      empName: (emp[empCol["name"]] || "").toString().trim(),
+      empEmail: (emp[empCol["email"]] || "").toString().trim(),
+      colleagues,
+      teamLeads,
+    };
+  } catch (err) {
+    Logger.log("Error in getEmployeeData: " + err);
+    return null;
+  }
 };
 
 /**
@@ -55,116 +76,105 @@ const sendAndUpdateALRequest = ({
 }) => {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-    const settingsheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
 
-    const emplastrow = empsheet.getLastRow();
-    const employees = empsheet.getRange(`A2:H${emplastrow}`).getValues();
+    // Dynamic accessors
+    const { sheet: empSheet, col: empCol, data: employees } = getEmployees();
+    const hrList = getHRList();
+    const teamLeads = getTeamLeadList();
+    const templates = getEmailTemplates();
 
-    const hrEmails = settingsheet
-      .getRange("A2:B")
-      .getValues()
-      .filter((row) => row[0].toString().trim() !== "")
-      .map((row) => row[1]);
-
-    const teamLeadMng = settingsheet
-      .getRange("C2:D")
-      .getValues()
-      .find((row) => row[1] === teamLead);
-
-    const emailTemplates = settingsheet.getRange("E2:G").getValues();
-
-    const alRequestHRNotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "AL_REQUEST_HR_NOTIFY"
+    const hrEmails = hrList.map((h) => h.email);
+    const teamLeadMng = teamLeads.find(
+      (tl) =>
+        tl.name?.toString().trim().toLowerCase() ===
+        teamLead?.toString().trim().toLowerCase()
     );
-    const alRequestTeamLeadNotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "AL_REQUEST_TEAMLEAD_NOTIFY"
-    );
+    if (!teamLeadMng) throw new Error(`Team lead not found: ${teamLead}`);
 
-    const compOffHRNotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "COMP_OFF_HR_NOTIFY"
-    );
-    const compOffTeamLeadNotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "COMP_OFF_TEAMLEAD_NOTIFY"
-    );
+    // Helper for finding template
+    const findTemplate = (code) => {
+      const tpl = templates.find(
+        (t) => t.code?.toString().trim().toUpperCase() === code
+      );
+      if (!tpl) throw new Error(`Missing email template: ${code}`);
+      return tpl;
+    };
 
-    const sickLeaveHRnotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "SICK_LEAVE_HR_NOTIFY"
-    );
-    const sickLeaveTeamleadNotify = emailTemplates.find(
-      (row) => row[0].toString().trim() === "SICK_LEAVE_TEAMLEAD_NOTIFY"
-    );
+    // Email templates
+    const alRequestHRNotify = findTemplate("AL_REQUEST_HR_NOTIFY");
+    const alRequestTeamLeadNotify = findTemplate("AL_REQUEST_TEAMLEAD_NOTIFY");
+    const compOffHRNotify = findTemplate("COMP_OFF_HR_NOTIFY");
+    const compOffTeamLeadNotify = findTemplate("COMP_OFF_TEAMLEAD_NOTIFY");
+    const sickLeaveHRnotify = findTemplate("SICK_LEAVE_HR_NOTIFY");
+    const sickLeaveTeamleadNotify = findTemplate("SICK_LEAVE_TEAMLEAD_NOTIFY");
 
-    const date = new Date(startDate);
-    let endDate = new Date(date);
-    endDate.setDate(endDate.getDate() + parseInt(daysCount) - 1);
-    const dateStr = getFormattedDate(date);
-    const endDateStr = getFormattedDate(endDate);
+    // Dates
+    const start = new Date(startDate);
+    const end = new Date(start);
+    end.setDate(end.getDate() + parseInt(daysCount) - 1);
+    const dateStr = getFormattedDate(start);
+    const endDateStr = getFormattedDate(end);
 
     const resColl =
-      responsibleColleague.toString().trim() !== ""
+      responsibleColleague?.toString().trim() !== ""
         ? responsibleColleague
         : "N/A";
 
+    // === Loop through Employees dynamically ===
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
-      if (emp[0].toString().trim() === "") {
-        continue;
-      }
+      if (!emp[empCol["email"]]) continue;
 
-      if (emp[1].toString().trim() === empEmail) {
-        let leavesUsed = emp[5].toString().trim() === "" ? 0 : parseInt(emp[5]);
-        let leavesRemining =
-          emp[6].toString().trim() !== ""
-            ? parseInt(emp[6])
-            : emp[4].toString().trim() !== ""
-              ? parseInt(emp[4])
-              : 0;
+      if (
+        emp[empCol["email"]].toString().trim().toLowerCase() ===
+        empEmail.toString().trim().toLowerCase()
+      ) {
+        let totalLeaves = parseInt(emp[empCol["total_leaves"]] || 0);
+        let leavesUsed = parseInt(emp[empCol["leaves_used"]] || 0);
+        let remainingLeaves = parseInt(
+          emp[empCol["remaining_leaves"]] || totalLeaves
+        );
+
+        // === Annual Leave ===
         if (leaveType === "Annual Leave") {
-          empsheet
-            .getRange(`E${i + 2}:H${i + 2}`)
+          empSheet
+            .getRange(i + 2, empCol["total_leaves"] + 1, 1, 4)
             .setValues([
               [
-                emp[4],
+                totalLeaves,
                 leavesUsed + parseInt(daysCount),
-                leavesRemining - parseInt(daysCount),
+                remainingLeaves - parseInt(daysCount),
                 dateStr,
               ],
             ]);
 
-          const hrSubject = alRequestHRNotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
+          const hrTemplate = alRequestHRNotify;
+          const tlTemplate = alRequestTeamLeadNotify;
 
-          const hrBody = alRequestHRNotify[2]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[END_DATE\]/gi, endDateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+          // Replace placeholders dynamically
+          const replaceTokens = (str) =>
+            str
+              .replace(/\[EMP_NAME\]/gi, empName)
+              .replace(/\[START_DATE\]/gi, dateStr)
+              .replace(/\[END_DATE\]/gi, endDateStr)
+              .replace(/\[DAYS_COUNT\]/gi, daysCount)
+              .replace(/\[LEAVE_TYPE\]/gi, leaveType)
+              .replace(/\[RES_COLL\]/gi, resColl)
+              .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng.name)
+              .replace(/\[VACATION_TYPE\]/gi, vacationType);
 
-          for (let hr of hrEmails) {
-            sendEmail(hr, hrSubject, hrBody);
-          }
-          const tlSubject = alRequestTeamLeadNotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
-          const tlBody = alRequestTeamLeadNotify[2]
-            .toString()
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[END_DATE\]/gi, endDateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
-
-          sendEmail(teamLeadMng[1], tlSubject, tlBody);
+          hrEmails.forEach((hr) =>
+            sendEmail(
+              hr,
+              replaceTokens(hrTemplate.subject),
+              replaceTokens(hrTemplate.body)
+            )
+          );
+          sendEmail(
+            teamLeadMng.email,
+            replaceTokens(tlTemplate.subject),
+            replaceTokens(tlTemplate.body)
+          );
 
           spreadsheet
             .getSheetByName(AL_STATISTIC_SHEET)
@@ -177,89 +187,77 @@ const sendAndUpdateALRequest = ({
               vacationType,
               daysCount,
             ]);
-        } else if (leaveType === "Sick Leave") {
+        }
+
+        // === Sick Leave ===
+        else if (leaveType === "Sick Leave") {
           const sickLeaveSheet = spreadsheet.getSheetByName(SICK_LEAVE_SHEET);
-          sickLeaveSheet.appendRow([
-            empName,
-            empEmail,
-            dateStr,
-            endDateStr
-          ])
+          sickLeaveSheet.appendRow([empName, empEmail, dateStr, endDateStr]);
 
-          const hrSubject = sickLeaveHRnotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
+          const hrTemplate = sickLeaveHRnotify;
+          const tlTemplate = sickLeaveTeamleadNotify;
 
-          const hrBody = sickLeaveHRnotify[2]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[END_DATE\]/gi, endDateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+          const replaceTokens = (str) =>
+            str
+              .replace(/\[EMP_NAME\]/gi, empName)
+              .replace(/\[START_DATE\]/gi, dateStr)
+              .replace(/\[END_DATE\]/gi, endDateStr)
+              .replace(/\[DAYS_COUNT\]/gi, daysCount)
+              .replace(/\[LEAVE_TYPE\]/gi, leaveType)
+              .replace(/\[RES_COLL\]/gi, resColl)
+              .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng.name)
+              .replace(/\[VACATION_TYPE\]/gi, vacationType);
 
-          for (let hr of hrEmails) {
-            sendEmail(hr, hrSubject, hrBody);
-          }
-          const tlSubject = sickLeaveTeamleadNotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
-          const tlBody = sickLeaveTeamleadNotify[2]
-            .toString()
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[END_DATE\]/gi, endDateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[LEAVE_TYPE\]/gi, leaveType)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+          hrEmails.forEach((hr) =>
+            sendEmail(
+              hr,
+              replaceTokens(hrTemplate.subject),
+              replaceTokens(hrTemplate.body)
+            )
+          );
+          sendEmail(
+            teamLeadMng.email,
+            replaceTokens(tlTemplate.subject),
+            replaceTokens(tlTemplate.body)
+          );
+        }
 
-          sendEmail(teamLeadMng[1], tlSubject, tlBody);
-        } else {
-          empsheet
-            .getRange(`E${i + 2}:G${i + 2}`)
+        // === Comp Off ===
+        else {
+          empSheet
+            .getRange(i + 2, empCol["total_leaves"] + 1, 1, 3)
             .setValues([
               [
-                parseInt(emp[4] || 0) + parseInt(daysCount),
-                emp[5],
-                parseInt(emp[6] || 0) + parseInt(daysCount),
+                totalLeaves + parseInt(daysCount),
+                leavesUsed,
+                remainingLeaves + parseInt(daysCount),
               ],
             ]);
 
-          const hrSubject = compOffHRNotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
+          const hrTemplate = compOffHRNotify;
+          const tlTemplate = compOffTeamLeadNotify;
 
-          const hrBody = compOffHRNotify[2]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
+          const replaceTokens = (str) =>
+            str
+              .replace(/\[EMP_NAME\]/gi, empName)
+              .replace(/\[START_DATE\]/gi, dateStr)
+              .replace(/\[DAYS_COUNT\]/gi, daysCount)
+              .replace(/\[RES_COLL\]/gi, resColl)
+              .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng.name)
+              .replace(/\[VACATION_TYPE\]/gi, vacationType);
 
-          for (let hr of hrEmails) {
-            sendEmail(hr, hrSubject, hrBody);
-          }
-
-          const tlSubject = compOffTeamLeadNotify[1]
-            .toString()
-            .replace(/\[EMP_NAME\]/gi, empName);
-          const tlBody = compOffTeamLeadNotify[2]
-            .toString()
-            .replace(/\[TEAMLEAD_NAME\]/gi, teamLeadMng[0])
-            .replace(/\[EMP_NAME\]/gi, empName)
-            .replace(/\[START_DATE\]/gi, dateStr)
-            .replace(/\[DAYS_COUNT\]/gi, daysCount)
-            .replace(/\[RES_COLL\]/gi, resColl)
-            .replace(/\[VACATION_TYPE\]/gi, vacationType);
-
-          sendEmail(teamLeadMng[1], tlSubject, tlBody);
+          hrEmails.forEach((hr) =>
+            sendEmail(
+              hr,
+              replaceTokens(hrTemplate.subject),
+              replaceTokens(hrTemplate.body)
+            )
+          );
+          sendEmail(
+            teamLeadMng.email,
+            replaceTokens(tlTemplate.subject),
+            replaceTokens(tlTemplate.body)
+          );
 
           spreadsheet
             .getSheetByName(AL_STATISTIC_SHEET)
@@ -279,6 +277,8 @@ const sendAndUpdateALRequest = ({
         };
       }
     }
+
+    // Employee not found
     return {
       error:
         "Something went wrong. Could not submit the request. Please contact HR Department.",
