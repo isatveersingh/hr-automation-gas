@@ -71,6 +71,14 @@ const getEmailTemplates = (sheetName = "Settings") => {
   return templates;
 };
 
+const fillTemplate = (template, map) => {
+  let result = template.toString();
+  for (const key in map) {
+    result = result.replace(new RegExp(`\\[${key}\\]`, "gi"), map[key]);
+  }
+  return result;
+};
+
 /**
  * Parses a date string or Date object into a Date object.
  * Supports "dd/mm/yyyy", "dd-mm-yyyy", "dd.mm.yyyy" formats.

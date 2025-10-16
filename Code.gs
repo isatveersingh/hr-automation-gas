@@ -224,127 +224,146 @@ const manageAnnualLeaves = () => {
 };
 
 const manageProbationPeriod = () => {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const empsheet = spreadsheet.getSheetByName(EMPLOYEES_SHEET);
-  const probationsheet = spreadsheet.getSheetByName(PROBATION_SHEET);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const empSheet = ss.getSheetByName(EMPLOYEES_SHEET);
+  const probationSheet = ss.getSheetByName(PROBATION_SHEET);
 
-  const empIndex = getColumnIndexes(empsheet);
-  const employees = empsheet.getDataRange().getValues();
+  if (!empSheet || !probationSheet)
+    throw new Error("One or more required sheets are missing.");
+
+  // === 🔹 Get data and dynamic column indexes ===
+  const empIndex = getColumnIndexes(empSheet);
+  const probIndex = getColumnIndexes(probationSheet);
+
+  const employees = empSheet.getDataRange().getValues().slice(1);
+  const probationData = probationSheet.getDataRange().getValues().slice(1);
 
   const hrEmails = getHRList();
   const emailTemplates = getEmailTemplates();
 
-  const probationHRnotify = emailTemplates.find(
-    (t) => t.code === "PROBATION_HR_NOTIFY"
-  );
+  // === 🔹 Validate templates ===
+  const templates = emailTemplates.reduce((acc, t) => {
+    acc[t.code] = t;
+    return acc;
+  }, {});
 
-  const probationTeamleadNotify = emailTemplates.find(
-    (t) => t.code === "PROBATION_TEAMLEAD_NOTIFY"
-  );
+  const probationHRnotify = templates.PROBATION_HR_NOTIFY;
+  const probationTeamleadNotify = templates.PROBATION_TEAMLEAD_NOTIFY;
+  const probationPassEmail = templates.PROBATION_PASSED;
 
+  if (!probationHRnotify || !probationTeamleadNotify || !probationPassEmail)
+    throw new Error(
+      "Missing one or more probation email templates in Settings sheet."
+    );
+
+  // === 🔹 Validate required columns ===
+  const requiredEmpCols = ["name", "email", "join_date", "department"];
+  requiredEmpCols.forEach((c) => {
+    if (empIndex[c] == null)
+      throw new Error(`Missing '${c}' column in Employees sheet`);
+  });
+
+  const requiredProbCols = ["employee_name", "result"];
+  requiredProbCols.forEach((c) => {
+    if (probIndex[c] == null)
+      throw new Error(`Missing '${c}' column in Probation sheet`);
+  });
+
+  // === 🔹 Process employees ===
   const today = new Date();
+  const newProbationRows = [];
 
-  for (let i = 1; i < employees.length; i++) {
-    const row = employees[i];
-
-    const name = row[empIndex["name"]];
+  employees.forEach((row) => {
+    const name = (row[empIndex["name"]] || "").toString().trim();
+    const email = (row[empIndex["email"]] || "").toString().trim();
     const joinDateStr = row[empIndex["join_date"]];
-    const department = row[empIndex["department"]];
+    const department = (row[empIndex["department"]] || "")
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    if (!name || !email || !joinDateStr) return; // skip incomplete rows
 
     const joinDate = parseDate(joinDateStr);
-
     const probationEndDate = new Date(joinDate);
     probationEndDate.setMonth(probationEndDate.getMonth() + 3);
 
     const probationNotifyDate = new Date(probationEndDate);
     probationNotifyDate.setDate(probationNotifyDate.getDate() - 7);
 
+    // === 📅 Notify HR & Team Leads 7 days before probation ends ===
     if (isSameDayMonthYear(today, probationNotifyDate)) {
-      const subject = probationHRnotify.subject
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name);
+      const commonMap = {
+        EMP_NAME: name,
+        JOIN_DATE: getFormattedDate(joinDate),
+        PROBATION_END_DATE: getFormattedDate(probationEndDate),
+      };
 
-      const body = probationHRnotify.body
-        .toString()
-        .replace(/\[EMP_NAME\]/gi, name)
-        .replace(/\[JOIN_DATE\]/gi, getFormattedDate(joinDate))
-        .replace(
-          /\[PROBATION_END_DATE\]/gi,
-          getFormattedDate(probationEndDate)
-        );
+      const subject = fillTemplate(probationHRnotify.subject, commonMap);
+      const body = fillTemplate(probationHRnotify.body, commonMap);
 
-      for (let hr of hrEmails) {
-        sendEmail(hr.email, subject, body);
+      hrEmails.forEach((hr) => sendEmail(hr.email, subject, body));
+      Logger.log(`Probation HR notify sent for ${name}`);
+
+      const depLead =
+        department === "service"
+          ? SERVICE_DEP_LEAD
+          : department === "client"
+          ? CLIENT_DEP_LEAD
+          : null;
+
+      if (depLead) {
+        const tlMap = {
+          ...commonMap,
+          TEAMLEAD_NAME: depLead.name,
+        };
+
+        const tlSubject = fillTemplate(probationTeamleadNotify.subject, tlMap);
+        const tlBody = fillTemplate(probationTeamleadNotify.body, tlMap);
+
+        sendEmail(depLead.email, tlSubject, tlBody);
+        Logger.log(`Team lead notify sent for ${name} (${depLead.name})`);
       }
 
-      if (department.toString().trim() === "Service") {
-        const tlSubject = probationTeamleadNotify.subject
-          .toString()
-          .replace(/\[EMP_NAME\]/gi, name);
-
-        const tlBody = probationTeamleadNotify.body
-          .replace(/\[EMP_NAME\]/gi, name)
-          .replace(/\[TEAMLEAD_NAME\]/gi, SERVICE_DEP_LEAD.name)
-          .replace(/\[JOIN_DATE\]/gi, getFormattedDate(joinDate))
-          .replace(
-            /\[PROBATION_END_DATE\]/gi,
-            getFormattedDate(probationEndDate)
-          );
-
-        sendEmail(SERVICE_DEP_LEAD.email, tlSubject, tlBody);
-      } else if (department.toString().trim() === "Client") {
-        const tlSubject = probationTeamleadNotify.subject
-          .toString()
-          .replace(/\[EMP_NAME\]/gi, name);
-
-        const tlBody = probationTeamleadNotify.body
-          .replace(/\[EMP_NAME\]/gi, name)
-          .replace(/\[TEAMLEAD_NAME\]/gi, CLIENT_DEP_LEAD.name)
-          .replace(/\[JOIN_DATE\]/gi, getFormattedDate(joinDate))
-          .replace(
-            /\[PROBATION_END_DATE\]/gi,
-            getFormattedDate(probationEndDate)
-          );
-
-        sendEmail(CLIENT_DEP_LEAD.email, tlSubject, tlBody);
-      }
-
-      probationsheet.appendRow([
+      newProbationRows.push([
         name,
         getFormattedDate(joinDate),
         getFormattedDate(probationEndDate),
         getFormattedDate(probationNotifyDate),
       ]);
     }
-  }
 
-  // const probationData = probationsheet.getRange("A2:J").getValues()
-  // const today = new Date();
+    // === ✅ On actual probation end date, send "passed" email ===
+    if (isSameDayMonthYear(today, probationEndDate)) {
+      const empProbationRow = probationData.find(
+        (r) => (r[probIndex["employee_name"]] || "").toString().trim() === name
+      );
 
-  // for (let i = 0; i < employees.length; i++) {
-  //   const [name, email, _birthdayStr, joinDateStr] = employees[i];
+      if (empProbationRow) {
+        const result = (empProbationRow[probIndex["result"]] || "")
+          .toString()
+          .toLowerCase();
 
-  //   if (name.toString().trim() === "") {
-  //     continue;
-  //   }
+        if (result === "probation passed") {
+          const alRequestForm =
+            PropertiesService.getScriptProperties().getProperty(
+              "AL_REQUEST_FORM"
+            );
 
-  //   const joinDate = parseDate(joinDateStr);
+          const passMap = {
+            EMP_NAME: name,
+            AL_REQUEST_FORM: alRequestForm || "",
+          };
 
-  //   const probationEndDate = new Date(joinDate)
-  //   probationEndDate.setMonth(probationEndDate.getMonth() + 3)
+          const subject = fillTemplate(probationPassEmail.subject, passMap);
+          const body = fillTemplate(probationPassEmail.body, passMap);
 
-  //   const probationNotifyDate = new Date(probationEndDate);
-  //   probationNotifyDate.setDate(probationNotifyDate.getDate() - 7)
-
-  //   if (isSameDayMonthYear(today, probationEndDate)) {
-  //     const probationStatus = probationData.find((row) => row[0] === name)[9];
-  //     if(probationStatus === "Probation Passed") {
-  //       // TO-DO: send email
-  //     }
-
-  //   }
-
-  // }
+          sendEmail(email, subject, body);
+          Logger.log(`Probation pass email sent to ${name} (${email})`);
+        }
+      }
+    }
+  });
 };
 
 /**
