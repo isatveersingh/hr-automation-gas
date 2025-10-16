@@ -104,7 +104,7 @@ const sendAndUpdateALRequest = ({
     const hrEmails = hrList.map((h) => h.email);
     const teamLeadMng = teamLeads.find(
       (tl) =>
-        tl.name?.toString().trim().toLowerCase() ===
+        tl.email?.toString().trim().toLowerCase() ===
         teamLead?.toString().trim().toLowerCase()
     );
     if (!teamLeadMng) throw new Error(`Team lead not found: ${teamLead}`);

@@ -19,8 +19,9 @@ const getColumnIndexes = (sheet) => {
   return colIndex;
 };
 
-const getHRList = (sheetName = "Settings") => {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+const getHRList = () => {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET);
   const col = getColumnIndexes(sheet);
   const data = sheet.getDataRange().getValues().slice(1); // skip header
 
@@ -35,8 +36,9 @@ const getHRList = (sheetName = "Settings") => {
   return hrList;
 };
 
-const getTeamLeadList = (sheetName = "Settings") => {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+const getTeamLeadList = () => {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET);
   const col = getColumnIndexes(sheet);
   const data = sheet.getDataRange().getValues().slice(1);
 
@@ -51,8 +53,9 @@ const getTeamLeadList = (sheetName = "Settings") => {
   return teamLeads;
 };
 
-const getEmailTemplates = (sheetName = "Settings") => {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+const getEmailTemplates = () => {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET);
   const col = getColumnIndexes(sheet);
   const data = sheet.getDataRange().getValues().slice(1);
 

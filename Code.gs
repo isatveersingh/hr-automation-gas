@@ -331,7 +331,6 @@ const manageProbationPeriod = () => {
   });
 
   const today = new Date();
-  const newProbationRows = [];
 
   employees.forEach((row) => {
     const name = (row[empIndex["name"]] || "").toString().trim();
