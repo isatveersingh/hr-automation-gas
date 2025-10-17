@@ -116,7 +116,7 @@ const sendQuarterlyLeaveReminders = () => {
       );
 
     const alRequestForm =
-      PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM") ||
+      PropertiesService.getScriptProperties().getProperty("WEB_FORM_LINK") ||
       "";
 
     // === 🔹 Validate required employee columns ===
@@ -148,7 +148,7 @@ const sendQuarterlyLeaveReminders = () => {
       });
       const body = fillTemplate(quarterlyALTemplate.body, {
         EMP_NAME: name,
-        AL_REQUEST_FORM: alRequestForm,
+        WEB_FORM_LINK: alRequestForm,
         TOTAL_AL: totalLeaves,
         AL_USED: leavesUsed,
         AL_REMAINING: remainingLeaves,
@@ -210,7 +210,7 @@ const manageAnnualLeaves = () => {
       );
 
     const alRequestForm =
-      PropertiesService.getScriptProperties().getProperty("AL_REQUEST_FORM") ||
+      PropertiesService.getScriptProperties().getProperty("WEB_FORM_LINK") ||
       "";
 
     // === 🔹 Validate required employee columns ===
@@ -249,7 +249,7 @@ const manageAnnualLeaves = () => {
         });
         const body = fillTemplate(sixMonthsEmail.body, {
           EMP_NAME: name,
-          AL_REQUEST_FORM: alRequestForm,
+          WEB_FORM_LINK: alRequestForm,
         });
 
         sendEmail(email, subject, body);
@@ -271,7 +271,7 @@ const manageAnnualLeaves = () => {
         const body = fillTemplate(alResetAnniversaryEmail.body, {
           EMP_NAME: name,
           ANNIVERSARY_YEARS: years,
-          AL_REQUEST_FORM: alRequestForm,
+          WEB_FORM_LINK: alRequestForm,
         });
 
         sendEmail(email, subject, body);
@@ -420,12 +420,12 @@ const manageProbationPeriod = () => {
         if (result === "probation passed") {
           const alRequestForm =
             PropertiesService.getScriptProperties().getProperty(
-              "AL_REQUEST_FORM"
+              "WEB_FORM_LINK"
             );
 
           const passMap = {
             EMP_NAME: name,
-            AL_REQUEST_FORM: alRequestForm || "",
+            WEB_FORM_LINK: alRequestForm || "",
           };
 
           const subject = fillTemplate(probationPassEmail.subject, passMap);
