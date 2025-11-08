@@ -92,8 +92,7 @@
 </head>
 
 <body>
-  <h1>Sino Services HR Department</h1>
-  <h2>Leave Request Portal</h2>
+  <h1>Sino Services HR Department Portal</h1>
 
   <!-- Phase 1: Email prompt -->
   <div id="emailSection">
@@ -104,10 +103,10 @@
   </div>
 
   <!-- Phase 2: Option buttons for probation -->
-  <div id="probationOptions" class="hidden optionButtons">
+  <div id="optionButtons" class="hidden optionButtons">
     <p>Please choose an action:</p>
     <button type="button" id="requestLeaveBtn">Request Leave</button>
-    <button type="button" id="probationFeedbackBtn">Provide Probation Feedback</button>
+    <button type="button" id="feedbackBtn">Provide Feedback</button>
   </div>
 
   <!-- Phase 3: Full leave form -->
@@ -152,14 +151,17 @@
 
   <!-- Phase 4: Probation Feedback form -->
   <form id="feedbackForm" class="hidden">
-    <h2 style="text-align:center;">Probation Feedback Form</h2>
+    <h2 style="text-align:center;">Feedback Form</h2>
     <input type="hidden" id="feedbackEmail" name="feedbackEmail" />
+    <input type="text" id="feedbackEmpName" name="feedbackEmpName" />
 
-    <label for="feedbackFor">For whom are you giving feedback?</label>
+    <label for="feedbackFor">About whom or about what do you want to give feedback about?</label>
     <select id="feedbackFor" name="feedbackFor" required>
       <option value="">Select an option</option>
-      <option value="self">Myself</option>
-      <option value="colleague">Colleague</option>
+      <option value="Self">Myself</option>
+      <option value="Colleague">Colleague</option>
+      <option value="Company">Company</option>
+      <option value="Process">Process</option>
     </select>
 
     <label for="colleagueName">Colleague Name (optional)</label>
@@ -195,25 +197,22 @@
 
           document.getElementById("empEmail").value = data.empEmail;
           document.getElementById("feedbackEmail").value = data.empEmail;
+          document.getElementById("feedbackEmpName").value = data.empName;
 
-          // If probation is false, show leave form directly
-          if (!data.probation) {
+          // Show probation options buttons
+          document.getElementById("emailSection").classList.add("hidden");
+          document.getElementById("optionButtons").classList.remove("hidden");
+
+          document.getElementById("requestLeaveBtn").onclick = () => {
             showLeaveForm(data);
-          } else {
-            // Show probation options buttons
-            document.getElementById("emailSection").classList.add("hidden");
-            document.getElementById("probationOptions").classList.remove("hidden");
+            document.getElementById("optionButtons").classList.add("hidden");
+          };
 
-            document.getElementById("requestLeaveBtn").onclick = () => {
-              showLeaveForm(data);
-              document.getElementById("probationOptions").classList.add("hidden");
-            };
+          document.getElementById("feedbackBtn").onclick = () => {
+            document.getElementById("optionButtons").classList.add("hidden");
+            document.getElementById("feedbackForm").classList.remove("hidden");
+          };
 
-            document.getElementById("probationFeedbackBtn").onclick = () => {
-              document.getElementById("probationOptions").classList.add("hidden");
-              document.getElementById("feedbackForm").classList.remove("hidden");
-            };
-          }
         })
         .withFailureHandler((err) => {
           errorDiv.textContent = err.message || "Failed to fetch employee data.";
@@ -295,9 +294,10 @@
       e.preventDefault();
       const submitBtn = this.querySelector("button[type='submit']");
       submitBtn.disabled = true;
-      submitBtn.textContent = "Submitting...";
+      submitBtn.innerHTML = 'Submitting... <span class="spinner"></span>';
 
       const feedbackData = {
+        empName: document.getElementById("feedbackEmpName").value,
         empEmail: document.getElementById("feedbackEmail").value,
         feedbackFor: document.getElementById("feedbackFor").value,
         colleagueName: document.getElementById("colleagueName").value,
@@ -307,18 +307,18 @@
       google.script.run
         .withSuccessHandler(() => {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit Feedback";
+          submitBtn.innerHTML = "Submit Feedback";
           document.getElementById("feedbackForm").reset();
           document.getElementById("status").textContent = "Feedback submitted successfully.";
           document.getElementById("status").style.color = "green";
         })
         .withFailureHandler((err) => {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit Feedback";
+          submitBtn.innerHTML = "Submit Feedback";
           document.getElementById("status").textContent = "Error: " + err.message;
           document.getElementById("status").style.color = "red";
         })
-        .submitProbationFeedback(feedbackData);
+        .submitFeedback(feedbackData);
     });
   </script>
 </body>
