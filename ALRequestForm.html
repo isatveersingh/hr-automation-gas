@@ -2,8 +2,12 @@
 <html>
 
 <head>
+  <!-- Set base target for all links to open in top frame -->
   <base target="_top" />
+  
+  <!-- CSS Styles for the HR Portal -->
   <style>
+    /* === 🔹 Body and Main Container Styles === */
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
@@ -14,17 +18,20 @@
       border: 1px solid #ccc;
     }
 
+    /* === 🔹 Heading Styles === */
     h1,
     h2 {
       text-align: center;
     }
 
+    /* === 🔹 Form Label Styles === */
     label {
       display: block;
       margin-top: 15px;
       font-weight: bold;
     }
 
+    /* === 🔹 Input, Select, and Textarea Styles === */
     input,
     select,
     textarea {
@@ -36,6 +43,7 @@
       border-radius: 5px;
     }
 
+    /* === 🔹 Button Styles === */
     button {
       width: 100%;
       padding: 12px;
@@ -47,20 +55,24 @@
       cursor: pointer;
     }
 
+    /* === 🔹 Disabled Button Styles === */
     button:disabled {
       background-color: #888;
     }
 
+    /* === 🔹 Status Message Styles === */
     #status {
       margin-top: 20px;
       text-align: center;
       font-weight: bold;
     }
 
+    /* === 🔹 Hidden Element Styles === */
     .hidden {
       display: none;
     }
 
+    /* === 🔹 Loading Spinner Styles === */
     button .spinner {
       display: inline-block;
       width: 16px;
@@ -73,17 +85,20 @@
       vertical-align: middle;
     }
 
+    /* === 🔹 Spinner Animation === */
     @keyframes spin {
       to {
         transform: rotate(360deg);
       }
     }
 
+    /* === 🔹 Option Buttons Container === */
     .optionButtons {
       text-align: center;
       margin: 20px 0;
     }
 
+    /* === 🔹 Option Button Layout === */
     .optionButtons button {
       width: 45%;
       margin: 5px;
@@ -92,35 +107,51 @@
 </head>
 
 <body>
+  <!-- === HEADER === -->
   <h1>Sino Services HR Department Portal</h1>
 
-  <!-- Phase 1: Email prompt -->
+  <!-- === PHASE 1: Email prompt ===
+       Initial entry point - asks user to enter their work email
+       Used to identify and fetch employee data
+  -->
   <div id="emailSection">
     <label for="emailInput">Enter your work email</label>
     <input type="email" id="emailInput" placeholder="you@company.com" required />
     <button id="loadFormBtn" onclick="loadForm()">Continue</button>
+    <!-- Error message display for invalid email or employee not found -->
     <div id="emailError" style="color: red; text-align: center;"></div>
   </div>
 
-  <!-- Phase 2: Option buttons for probation -->
+  <!-- === PHASE 2: Option buttons for probation ===
+       After email validation, shows choice between requesting leave or providing feedback
+       Only visible for employees in probation period
+  -->
   <div id="optionButtons" class="hidden optionButtons">
     <p>Please choose an action:</p>
     <button type="button" id="requestLeaveBtn">Request Leave</button>
     <button type="button" id="feedbackBtn">Provide Feedback</button>
   </div>
 
-  <!-- Phase 3: Full leave form -->
+  <!-- === PHASE 3: Full leave request form ===
+       Main form for submitting leave requests
+       Allows selection of leave type, dates, colleague responsible, and team lead approval
+  -->
   <form id="leaveForm" class="hidden">
+    <!-- === Employee Information (read-only) === -->
     <label for="empName">Employee Name</label>
     <input type="text" id="empName" name="empName" readonly />
+    <!-- Hidden field to store employee email for submission -->
     <input type="hidden" id="empEmail" name="empEmail" />
 
+    <!-- === Leave Start Date === -->
     <label for="startDate">Start Date</label>
     <input type="date" id="startDate" required />
 
+    <!-- === Number of Days === -->
     <label for="daysCount">How Many Days</label>
     <input type="number" id="daysCount" min="1" required />
 
+    <!-- === Leave Type Selection === -->
     <label for="leaveType">Type of Leave</label>
     <select id="leaveType" required>
       <option value="">Select Leave Type</option>
@@ -129,32 +160,43 @@
       <option value="Compensatory Days Off">Compensatory Days Off</option>
     </select>
 
+    <!-- === Responsible Colleague(s) === -->
     <label for="responsibleColleague">Responsible Colleague</label>
+    <!-- Helper text for multi-select functionality -->
     <small style="color:gray; font-style:italic;">
       Hold <b>Ctrl</b> (Windows) or <b>Command</b> (Mac) to select multiple colleagues.
     </small>
     <select id="responsibleColleague" multiple></select>
 
+    <!-- === Team Lead Approval === -->
     <label for="teamLead">Approving Team Lead</label>
     <select id="teamLead" required>
       <option value="">Select Team Lead</option>
     </select>
 
+    <!-- === Vacation Type (Paid/Unpaid) === -->
     <label for="vacationType">Type of Vacation</label>
     <select id="vacationType" required>
       <option value="Paid" selected>Paid</option>
       <option value="Unpaid">Unpaid</option>
     </select>
 
+    <!-- === Submit Button === -->
     <button type="submit" id="submitBtn">Submit</button>
   </form>
 
-  <!-- Phase 4: Probation Feedback form -->
+  <!-- === PHASE 4: Probation Feedback form ===
+       For employees to provide feedback during probation period
+       Can be about self, colleague, company, or processes
+  -->
   <form id="feedbackForm" class="hidden">
     <h2 style="text-align:center;">Feedback Form</h2>
+    
+    <!-- === Hidden Employee Data === -->
     <input type="hidden" id="feedbackEmail" name="feedbackEmail" />
     <input type="text" id="feedbackEmpName" name="feedbackEmpName" />
 
+    <!-- === Feedback Category === -->
     <label for="feedbackFor">About whom or about what do you want to give feedback about?</label>
     <select id="feedbackFor" name="feedbackFor" required>
       <option value="">Select an option</option>
@@ -164,71 +206,100 @@
       <option value="Process">Process</option>
     </select>
 
+    <!-- === Colleague Name (optional) === -->
     <label for="colleagueName">Colleague Name (optional)</label>
     <input type="text" id="colleagueName" name="colleagueName" placeholder="Enter colleague name if applicable" />
 
+    <!-- === Feedback Text === -->
     <label for="feedbackText">Your Feedback</label>
     <textarea id="feedbackText" name="feedbackText" rows="5" required></textarea>
 
+    <!-- === Submit Button === -->
     <button type="submit">Submit Feedback</button>
   </form>
 
+  <!-- === Status Messages ===
+       Displays success/error messages for form submissions
+  -->
   <div id="status"></div>
 
+  <!-- === JavaScript Logic === -->
   <script>
+    /**
+     * loadForm()
+     * Validates email and fetches employee data from the server
+     * Populates form fields based on employee information
+     */
     function loadForm() {
+      // === 🔹 Get email input and validate === 
       const email = document.getElementById("emailInput").value.trim();
       const errorDiv = document.getElementById("emailError");
       errorDiv.textContent = "";
 
+      // === 🔹 Check for empty email ===
       if (!email) {
         errorDiv.textContent = "Please enter a valid email.";
         return;
       }
 
+      // === 🔹 Show loading state ===
       const btn = document.getElementById("loadFormBtn");
       btn.disabled = true;
       btn.innerHTML = 'Loading... <span class="spinner"></span>';
 
+      // === 🔹 Call server-side function to get employee data ===
       google.script.run
+        // === On success: populate form with employee data ===
         .withSuccessHandler((data) => {
           btn.disabled = false;
           btn.innerHTML = 'Continue';
 
+          // === Store email in form fields ===
           document.getElementById("empEmail").value = data.empEmail;
           document.getElementById("feedbackEmail").value = data.empEmail;
           document.getElementById("feedbackEmpName").value = data.empName;
 
-          // Show probation options buttons
+          // === Hide email section and show option buttons ===
           document.getElementById("emailSection").classList.add("hidden");
           document.getElementById("optionButtons").classList.remove("hidden");
 
+          // === === Leave Request Button Handler === ===
           document.getElementById("requestLeaveBtn").onclick = () => {
             showLeaveForm(data);
             document.getElementById("optionButtons").classList.add("hidden");
           };
 
+          // === === Feedback Button Handler === ===
           document.getElementById("feedbackBtn").onclick = () => {
             document.getElementById("optionButtons").classList.add("hidden");
             document.getElementById("feedbackForm").classList.remove("hidden");
           };
 
         })
+        // === On error: show error message ===
         .withFailureHandler((err) => {
           errorDiv.textContent = err.message || "Failed to fetch employee data.";
           btn.disabled = false;
         })
+        // === Invoke server-side function ===
         .getEmployeeData(email);
     }
 
+    /**
+     * showLeaveForm(data)
+     * Populates and displays the leave request form
+     * Fills dropdowns with colleagues and team leads
+     */
     function showLeaveForm(data) {
+      // === 🔹 Hide email section and show leave form ===
       document.getElementById("emailSection").classList.add("hidden");
       document.getElementById("leaveForm").classList.remove("hidden");
 
+      // === 🔹 Populate employee information === 
       document.getElementById("empName").value = data.empName;
       document.getElementById("empEmail").value = data.empEmail;
 
-      // Populate colleagues
+      // === 🔹 Populate colleagues dropdown ===
       const colleagueSelect = document.getElementById("responsibleColleague");
       colleagueSelect.innerHTML = "";
       data.colleagues.forEach((col) => {
@@ -238,7 +309,7 @@
         colleagueSelect.appendChild(opt);
       });
 
-      // Populate team leads
+      // === 🔹 Populate team leads dropdown ===
       const teamLeadSelect = document.getElementById("teamLead");
       teamLeadSelect.innerHTML = `<option value="">Select Team Lead</option>`;
       data.teamLeads.forEach((lead) => {
@@ -249,29 +320,37 @@
       });
     }
 
-    // Handle leave form submission
+    // === === Leave Form Submission Handler === ===
     document.getElementById("leaveForm").addEventListener("submit", function (e) {
       e.preventDefault();
+      
+      // === 🔹 Show loading state ===
       const btn = document.getElementById("submitBtn");
       btn.disabled = true;
       btn.innerHTML = 'Submitting... <span class="spinner"></span>';
 
+      // === 🔹 Collect form data ===
       const formData = {
         empName: document.getElementById("empName").value,
         empEmail: document.getElementById("empEmail").value,
         startDate: document.getElementById("startDate").value,
         daysCount: document.getElementById("daysCount").value,
         leaveType: document.getElementById("leaveType").value,
+        // Multiple selected colleagues joined as comma-separated string
         responsibleColleague: Array.from(document.getElementById("responsibleColleague").selectedOptions).map(o => o.value).join(","),
         teamLead: document.getElementById("teamLead").value,
         vacationType: document.getElementById("vacationType").value,
       };
 
+      // === 🔹 Submit to server ===
       google.script.run
+        // === On success: show success message ===
         .withSuccessHandler((data) => {
           btn.disabled = false;
           btn.innerHTML = "Submit";
           document.getElementById("leaveForm").reset();
+          
+          // === Display result message ===
           if (data.error) {
             document.getElementById("status").textContent = data.error;
             document.getElementById("status").style.color = "red";
@@ -280,22 +359,27 @@
             document.getElementById("status").style.color = "green";
           }
         })
+        // === On error: show error message ===
         .withFailureHandler((err) => {
           document.getElementById("status").textContent = "Error: " + err.message;
           document.getElementById("status").style.color = "red";
           btn.disabled = false;
           btn.textContent = "Submit";
         })
+        // === Invoke server-side function ===
         .sendAndUpdateALRequest(formData);
     });
 
-    // Handle feedback form submission
+    // === === Feedback Form Submission Handler === ===
     document.getElementById("feedbackForm").addEventListener("submit", function (e) {
       e.preventDefault();
+      
+      // === 🔹 Show loading state ===
       const submitBtn = this.querySelector("button[type='submit']");
       submitBtn.disabled = true;
       submitBtn.innerHTML = 'Submitting... <span class="spinner"></span>';
 
+      // === 🔹 Collect feedback data ===
       const feedbackData = {
         empName: document.getElementById("feedbackEmpName").value,
         empEmail: document.getElementById("feedbackEmail").value,
@@ -304,7 +388,9 @@
         feedbackText: document.getElementById("feedbackText").value
       };
 
+      // === 🔹 Submit to server ===
       google.script.run
+        // === On success: show success message ===
         .withSuccessHandler(() => {
           submitBtn.disabled = false;
           submitBtn.innerHTML = "Submit Feedback";
@@ -312,12 +398,14 @@
           document.getElementById("status").textContent = "Feedback submitted successfully.";
           document.getElementById("status").style.color = "green";
         })
+        // === On error: show error message ===
         .withFailureHandler((err) => {
           submitBtn.disabled = false;
           submitBtn.innerHTML = "Submit Feedback";
           document.getElementById("status").textContent = "Error: " + err.message;
           document.getElementById("status").style.color = "red";
         })
+        // === Invoke server-side function ===
         .submitFeedback(feedbackData);
     });
   </script>
